@@ -78,6 +78,7 @@ local defaultSettings = T{
     TapTimer = 0.4,
     EnableDoubleTap = true,
     EnablePriority = true,
+    EnablePaletteSwapCombo = true,
     ShowDoubleDisplay = true,
     SwapToSingleDisplay = false,
     AllowInventoryPassthrough = true,

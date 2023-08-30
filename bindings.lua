@@ -226,6 +226,34 @@ function exposed:NextPalette()
     end
 end
 
+function exposed:RearrangePalette(direction)
+    local paletteCount = #bindings.JobBindings.Palettes;
+    local newIndex = bindings.ActivePaletteIndex + direction;
+    if (paletteCount == 1) then
+        Error('Current job only has one palette!');
+        return;
+    elseif (bindings.ActivePaletteIndex == 1) then
+        Error('Cannot move base palette!');
+        return;
+    elseif (newIndex <= 1) then
+        Error('Palette cannot be moved into base position!');
+        return;
+    elseif (newIndex > paletteCount) then
+        Error('Palette is already at the end of the list!');
+        return;
+    end
+
+    table.insert(bindings.JobBindings.Palettes, newIndex, table.remove(bindings.JobBindings.Palettes, bindings.ActivePaletteIndex));
+    bindings.ActivePaletteIndex = newIndex;
+    bindings.ActivePalette = bindings.JobBindings.Palettes[bindings.ActivePaletteIndex];
+    ApplyBindings();
+    if (gBindingGUI:GetActive()) then
+        gBindingGUI:UpdatePalette();
+    end
+
+    Message(string.format('Palette "%s" moved into position #%u', bindings.ActivePalette.Name, newIndex));
+end
+
 function exposed:HandleCommand(args)
     if (#args < 3) then
         return;
@@ -311,6 +339,23 @@ function exposed:HandleCommand(args)
         end
         
         Error('Could not find palette to change to.');
+    elseif (cmd == 'move') then
+        if (args[4] == nil) then
+            Error('Command Syntax: $H/tb palette move [up|down]$R.');
+            return;
+        end
+        local subcmd = string.lower(args[4]);
+      
+        if (subcmd == 'up') then
+            self:RearrangePalette(1);
+            return;
+        elseif (subcmd == 'down') then
+            self:RearrangePalette(-1);
+            return;
+        else 
+            Error('Command Syntax: $H/tb palette move [up|down]$R.');
+            return;
+        end
     end
 end
 

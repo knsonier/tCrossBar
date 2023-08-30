@@ -112,6 +112,10 @@ local function InitializeControls()
     end
 end
 
+local function Ternary(condition, true_result, false_result)
+    if (condition) then return true_result else return false_result end
+end 
+
 function controller:SetLayout(layout)
     gBindingGUI:Close();
     self.BindMenuState.Active = false;
@@ -231,7 +235,8 @@ function controller:Trigger(button, pressed)
     
     if (button == controls.PreviousPalette) then
         self.ComboState.PrevPalette = pressed;
-        if (pressed == true) and (self:GetMacroState() == 1) then
+        local swapComboCheck = Ternary(gSettings.EnablePaletteSwapCombo, gSettings.EnablePaletteSwapCombo and self:GetMacroState() == 1, self:GetMacroState() == 0);
+        if (pressed == true and swapComboCheck == true) then
             gBindings:PreviousPalette();
         end
         if (self:GetMacroState() ~= 0) then
@@ -240,7 +245,8 @@ function controller:Trigger(button, pressed)
         
     elseif (button == controls.NextPalette) then
         self.ComboState.NextPalette = pressed;
-        if (pressed == true) and (self:GetMacroState() == 2) then
+        local swapComboCheck = Ternary(gSettings.EnablePaletteSwapCombo, gSettings.EnablePaletteSwapCombo and self:GetMacroState() == 2, self:GetMacroState() == 0);
+        if (pressed == true and swapComboCheck == true) then
             gBindings:NextPalette();
         end
         if (self:GetMacroState() ~= 0) then

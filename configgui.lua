@@ -198,6 +198,8 @@ function exposed:Render()
                     imgui.ShowHelp('Loads the selected device mapping.', true);
                     CheckBox('Combo Priority', 'EnablePriority');
                     imgui.ShowHelp('When enabled, pressing LR then R2 will be a seperate set from pressing R2 then L2.  When disabled, order won\'t matter.');
+                    CheckBox('Palette Swap Combo Priority', 'EnablePaletteSwapCombo');
+                    imgui.ShowHelp('When enabled, holding L2 or R2 plus the palette swap button will be required to swap palettes. When disabled, just the palette swap button is required.');
                     CheckBox('Double Tap', 'EnableDoubleTap');
                     imgui.ShowHelp('When enabled, a quick double tap then hold of L2 or R2 will produce a seperate macro set from single taps.');
                     CheckBox('Always Show Double', 'ShowDoubleDisplay');
