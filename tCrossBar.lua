@@ -21,23 +21,36 @@
 
 addon.name      = 'tCrossBar';
 addon.author    = 'Thorny';
-addon.version   = '1.09';
+addon.version   = '2.07';
 addon.desc      = 'Creates a controller scheme for activating macros, and provides visual aids for your macroed abilities.';
 addon.link      = 'https://ashitaxi.com/';
 
 require('common');
-chat = require('chat');
+local jit = require('jit');
+jit.off();
+local chat = require('chat');
+local gdi  = require('gdifonts.include');
 
-local isInitialized = false;
-local isUnloading = false;
+function Error(text)
+    local color = ('\30%c'):format(68);
+    local highlighted = color .. string.gsub(text, '$H', '\30\01\30\02');
+    highlighted = string.gsub(highlighted, '$R', '\30\01' .. color);
+    print(chat.header(addon.name) .. highlighted .. '\30\01');
+end
+
+
+function Message(text)
+    local color = ('\30%c'):format(106);
+    local highlighted = color .. string.gsub(text, '$H', '\30\01\30\02');
+    highlighted = string.gsub(highlighted, '$R', '\30\01' .. color);
+    print(chat.header(addon.name) .. highlighted .. '\30\01');
+end
 
 ashita.events.register('load', 'load_cb', function ()
-    if (AshitaCore:GetPluginManager():IsLoaded('tRenderer') == true) then
-        isInitialized = require('initializer');
-    else
-        print(chat.header(addon.name) .. chat.color1(2, 'tRenderer') .. chat.error(' plugin must be loaded to use this addon!'));
-        isInitialized = false;
-    end
+    gdi:set_auto_render(false);
+    gInitializer     = require('initializer');
+    require('callbacks');
+    require('commands');
 end);
 
 --[[
@@ -45,56 +58,5 @@ end);
 * desc : Event called when the addon is being unloaded.
 --]]
 ashita.events.register('unload', 'unload_cb', function ()
-    if (isInitialized) then
-        if (gInterface ~= nil) then
-            gInterface:Destroy();
-        end
-    end
-end);
-
-ashita.events.register('command', 'command_cb', function (e)
-    local args = e.command:args();
-    if (#args == 0 or string.lower(args[1]) ~= '/tc') then
-        return;
-    end
-    e.blocked = true;
-
-    if (#args == 1) then
-        gConfigGUI:Show();
-        return;
-    end
-
-    if (#args > 1) and (string.lower(args[2]) == 'activate') then
-        if (#args > 2) then
-            local macroIndex = tonumber(args[3]);
-            gInterface:GetSquareManager():Activate(macroIndex);
-        end
-        return;
-    end
-    
-    if (#args > 1) and (string.lower(args[2]) == 'palette') then
-        gBindings:HandleCommand(args);
-        return;
-    end
-end);
-
-ashita.events.register('d3d_present', 'd3d_present_cb', function ()
-    -- Destroy addon if renderer isn't present or initialization failed.
-    if (not isInitialized) or (isUnloading) or (AshitaCore:GetPluginManager():IsLoaded('tRenderer') == false) then
-        if (not isUnloading) then
-            AshitaCore:GetChatManager():QueueCommand(-1, string.format('/addon unload %s', addon.name));
-            isUnloading = true;
-        end
-        return;
-    end
-
-    gController:Tick();
-
-    gBindingGUI:Render();
-    
-    gConfigGUI:Render();
-    
-    if (gInterface ~= nil) then
-        gInterface:Tick();
-    end
+    gdi:destroy_interface();
 end);

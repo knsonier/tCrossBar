@@ -251,42 +251,42 @@ local layout = {
         end,
 
         --L2
-        [16] = function(e)
+        [32] = function(e)
             if HandleButton('L2', e.state > 0) then
                 e.blocked = true;
             end
         end,
         
         --R2
-        [17] = function(e)
+        [33] = function(e)
             if HandleButton('R2', e.state > 0) then
                 e.blocked = true;
             end
         end,
 
         --Horizontal L-Stick Movement
-        [18] = function(e)
+        [34] = function(e)
             if HandleStick('LStick', e.state, state.LStick.Vertical) then
                 e.blocked = true;
             end
         end,
         
         --Vertical L-Stick Movement
-        [19] = function(e)
+        [35] = function(e)
             if HandleStick('LStick', state.LStick.Horizontal, e.state) then
                 e.blocked = true;
             end
         end,
 
         --Horizontal R-Stick Movement
-        [20] = function(e)
+        [36] = function(e)
             if HandleStick('RStick', e.state, state.RStick.Vertical) then
                 e.blocked = true;
             end
         end,
         
         --Vertical R-Stick Movement
-        [21] = function(e)
+        [37] = function(e)
             if HandleStick('RStick', state.RStick.Horizontal, e.state) then
                 e.blocked = true;
             end

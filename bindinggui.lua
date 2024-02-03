@@ -1,5 +1,10 @@
 local d3d8 = require('d3d8');
 local d3d8_device = d3d8.get_device();
+local encoding = require('gdifonts.encoding');
+local ffi = require('ffi');
+local imgui = require('imgui');
+local inventory = require('state.inventory');
+local player = require('state.player');
 local header = { 1.0, 0.75, 0.55, 1.0 };
 local activeHeader = { 0.5, 1.0, 0.5, 1.0 };
 local state = { IsOpen={ false } };
@@ -110,58 +115,23 @@ local function DecrementCombo(varName)
     end
 end
 
-local function DrawMacroImage()
-    local posY = imgui.GetCursorPosY();
-    local layout = gInterface:GetLayout();
-    local width = 32;
-    local height = 32;
-    if layout then
-        width = layout.ImageObjects.Icon.Width;
-        height = layout.ImageObjects.Icon.Height;
-    end
-    if (state.Texture ~= nil) then
-        local posX = (253 - width) / 2;
-        imgui.SetCursorPos({ posX, posY });
-        imgui.Image(tonumber(ffi.cast("uint32_t", state.Texture)),
-        { width, height },
-        { 0, 0 }, { 1, 1 }, { 1, 1, 1, 1 }, { 0, 0, 0, 0 });
-    end
-    imgui.SetCursorPos({imgui.GetCursorPosX(), posY + height});
-end
-
 local function UpdateMacroImage()
     state.Texture = nil;
     if (state.MacroImage == nil) then
         return;
     end
-
-    if (string.sub(state.MacroImage[1], 1, 5) == 'ITEM:') then
-        local item = AshitaCore:GetResourceManager():GetItemById(tonumber(string.sub(state.MacroImage[1], 6)));
-        if (item ~= nil) then    
-            local dx_texture_ptr = ffi.new('IDirect3DTexture8*[1]');
-            if (ffi.C.D3DXCreateTextureFromFileInMemoryEx(d3d8_device, item.Bitmap, item.ImageSize, 0xFFFFFFFF, 0xFFFFFFFF, 1, 0, ffi.C.D3DFMT_A8R8G8B8, ffi.C.D3DPOOL_MANAGED, ffi.C.D3DX_DEFAULT, ffi.C.D3DX_DEFAULT, 0xFF000000, nil, nil, dx_texture_ptr) == ffi.C.S_OK) then
-                state.Texture = d3d8.gc_safe_release(ffi.cast('IDirect3DTexture8*', dx_texture_ptr[0]));
-            end
-        end
-        return;
-    end
-
-    local path = GetImagePath(state.MacroImage[1]);
-    if (path ~= nil) then
-        local dx_texture_ptr = ffi.new('IDirect3DTexture8*[1]');
-        if (ffi.C.D3DXCreateTextureFromFileA(d3d8_device, path, dx_texture_ptr) == ffi.C.S_OK) then
-            state.Texture = d3d8.gc_safe_release(ffi.cast('IDirect3DTexture8*', dx_texture_ptr[0]));
-        end
+    local tx = gTextureCache:GetTexture(state.MacroImage[1]);
+    if tx then
+        state.Texture = tx.Texture;
     end
 end
 
 Setup.Ability = function(skipUpdate)
     state.ActionResources = T{};
     local resMgr = AshitaCore:GetResourceManager();
-    local playMgr = AshitaCore:GetMemoryManager():GetPlayer();
     for i = 0x200,0x600 do
         local res = resMgr:GetAbilityById(i);
-        if (res) and (playMgr:HasAbility(res.Id)) then
+        if (res) and (player:KnowsAbility(res.Id)) then
             state.ActionResources:append(res);
         end
     end
@@ -172,7 +142,7 @@ Setup.Ability = function(skipUpdate)
 
     state.Combos.Action = T{};
     for _,res in ipairs(state.ActionResources) do
-        state.Combos.Action:append(res.Name[1]);
+        state.Combos.Action:append(encoding:ShiftJIS_To_UTF8(res.Name[1]));
     end
 
     state.Indices.Action = 1;
@@ -202,7 +172,7 @@ Setup.Item = function(skipUpdate)
     local bags = T{0, 3};
     for _,bag in ipairs(bags) do
         for i = 1,80 do
-            local item = gInventory:GetItemTable(bag, i);
+            local item = inventory:GetItemTable(bag, i);
             if (item ~= nil) then
                 local res = resMgr:GetItemById(item.Id);
                 if (res ~= nil) and (bit.band(res.Flags, 0x200) == 0x200) then
@@ -217,7 +187,7 @@ Setup.Item = function(skipUpdate)
     bags = T{ 0, 8, 10, 11, 12, 13, 14, 15, 16 };
     for _,bag in ipairs(bags) do
         for i = 1,80 do
-            local item = gInventory:GetItemTable(bag, i);
+            local item = inventory:GetItemTable(bag, i);
             if (item ~= nil) then
                 local res = resMgr:GetItemById(item.Id);
                 if (res ~= nil) and (bit.band(res.Flags, 0x400) == 0x400) then
@@ -239,12 +209,13 @@ Setup.Item = function(skipUpdate)
         local next = state.ActionResources[index + 1];
 
         --Show item id if multiple matching items..
-        if (prev) and (prev.Name[1] == res.Name[1]) then
-            state.Combos.Action:append(string.format('%s[%u]', res.Name[1], res.Id));            
-        elseif (next) and (next.Name[1] == res.Name[1]) then
-            state.Combos.Action:append(string.format('%s[%u]', res.Name[1], res.Id));
+        local name = encoding:ShiftJIS_To_UTF8(res.Name[1]);
+        if (prev) and (prev.Name[1] == name) then
+            state.Combos.Action:append(string.format('%s[%u]', name, res.Id));            
+        elseif (next) and (next.Name[1] == name) then
+            state.Combos.Action:append(string.format('%s[%u]', name, res.Id));
         else
-            state.Combos.Action:append(res.Name[1]);
+            state.Combos.Action:append(name);
         end
     end
 
@@ -257,22 +228,22 @@ end
 Setup.Spell = function(skipUpdate)
     state.ActionResources = T{};
     local resMgr = AshitaCore:GetResourceManager();
-    local playMgr = AshitaCore:GetMemoryManager():GetPlayer();
-    local mainJob = playMgr:GetMainJob();
-    local mainJobLevel = playMgr:GetMainJobLevel();
-    local subJob = playMgr:GetSubJob();
-    local subJobLevel = playMgr:GetSubJobLevel();
+    local jobData = player:GetJobData();
+    local mainJob = jobData.MainJob;
+    local mainJobLevel = jobData.MainJobLevel;
+    local subJob = jobData.SubJob;
+    local subJobLevel = jobData.SubJobLevel;
 
     for i = 1,0x400 do
         local res = resMgr:GetSpellById(i);
-        if (res) and (playMgr:HasSpell(res.Index)) then
+        if (res) and (player:HasSpell(res)) then
             local levelRequired = res.LevelRequired;
             --Maybe not best workaround, but trust are all usable at WAR1.
             if (levelRequired[2] ~= 1) then
                 local hasSpell = false;
                 local jpMask = res.JobPointMask;
                 if (bit.band(bit.rshift(jpMask, mainJob), 1) == 1) then
-                    if (mainJobLevel == 99) and (gPlayer:GetJobPointTotal(mainJob) >= levelRequired[mainJob + 1]) then
+                    if (mainJobLevel == 99) and (player:GetJobPointTotal(mainJob) >= levelRequired[mainJob + 1]) then
                         hasSpell = true;
                     end
                 elseif (levelRequired[mainJob + 1] ~= -1) and (mainJobLevel >= levelRequired[mainJob + 1]) then
@@ -298,7 +269,7 @@ Setup.Spell = function(skipUpdate)
 
     state.Combos.Action = T{};
     for _,res in ipairs(state.ActionResources) do
-        state.Combos.Action:append(res.Name[1]);
+        state.Combos.Action:append(encoding:ShiftJIS_To_UTF8(res.Name[1]));
     end
 
     if (not skipUpdate) then
@@ -310,15 +281,15 @@ end
 Setup.Trust = function(skipUpdate)
     state.ActionResources = T{};
     local resMgr = AshitaCore:GetResourceManager();
-    local playMgr = AshitaCore:GetMemoryManager():GetPlayer();
-    local mainJob = playMgr:GetMainJob();
-    local mainJobLevel = playMgr:GetMainJobLevel();
-    local subJob = playMgr:GetSubJob();
-    local subJobLevel = playMgr:GetSubJobLevel();
+    local jobData = player:GetJobData();
+    local mainJob = jobData.MainJob;
+    local mainJobLevel = jobData.MainJobLevel;
+    local subJob = jobData.SubJob;
+    local subJobLevel = jobData.SubJobLevel;
 
     for i = 1,0x400 do
         local res = resMgr:GetSpellById(i);
-        if (res) and (playMgr:HasSpell(res.Index)) then
+        if (res) and (player:HasSpell(res)) then
             local levelRequired = res.LevelRequired;
 
             --Maybe not best workaround, but trust are all usable at WAR1.
@@ -326,7 +297,7 @@ Setup.Trust = function(skipUpdate)
                 local hasSpell = false;
                 local jpMask = res.JobPointMask;
                 if (bit.band(bit.rshift(jpMask, mainJob), 1) == 1) then
-                    if (mainJobLevel == 99) and (gPlayer:GetJobPointTotal(mainJob) >= levelRequired[mainJob + 1]) then
+                    if (mainJobLevel == 99) and (player:GetJobPointTotal(mainJob) >= levelRequired[mainJob + 1]) then
                         hasSpell = true;
                     end
                 elseif (levelRequired[mainJob + 1] ~= -1) and (mainJobLevel >= levelRequired[mainJob + 1]) then
@@ -352,7 +323,7 @@ Setup.Trust = function(skipUpdate)
 
     state.Combos.Action = T{};
     for _,res in ipairs(state.ActionResources) do
-        state.Combos.Action:append(res.Name[1]);
+        state.Combos.Action:append(encoding:ShiftJIS_To_UTF8(res.Name[1]));
     end
 
     if (not skipUpdate) then
@@ -364,10 +335,9 @@ end
 Setup.Weaponskill = function(skipUpdate)
     state.ActionResources = T{};
     local resMgr = AshitaCore:GetResourceManager();
-    local playMgr = AshitaCore:GetMemoryManager():GetPlayer();
     for i = 1,0x200 do
         local res = resMgr:GetAbilityById(i);
-        if (res) and (playMgr:HasAbility(res.Id)) then
+        if (res) and (player:KnowsAbility(res.Id)) then
             state.ActionResources:append(res);
         end
     end
@@ -378,7 +348,7 @@ Setup.Weaponskill = function(skipUpdate)
 
     state.Combos.Action = T{};
     for _,res in ipairs(state.ActionResources) do
-        state.Combos.Action:append(res.Name[1]);
+        state.Combos.Action:append(encoding:ShiftJIS_To_UTF8(res.Name[1]));
     end
 
     if (not skipUpdate) then
@@ -402,16 +372,17 @@ end
 
 Update.Ability = function(index)
     local res = state.ActionResources[index];
+    local name = encoding:ShiftJIS_To_UTF8(res.Name[1]);
     if (bit.band(res.Targets, 0xFC) ~= 0) then
         if (gSettings.DefaultSelectTarget) then
-            state.MacroText = { string.format('/ja \"%s\" <st>', res.Name[1]) };
+            state.MacroText = { string.format('/ja \"%s\" <st>', name) };
         else
-            state.MacroText = { string.format('/ja \"%s\" <t>', res.Name[1]) };
+            state.MacroText = { string.format('/ja \"%s\" <t>', name) };
         end
     else
-        state.MacroText = { string.format('/ja \"%s\" <me>', res.Name[1]) };
+        state.MacroText = { string.format('/ja \"%s\" <me>', name) };
     end
-    state.MacroLabel = { res.Name[1] };
+    state.MacroLabel = { name };
     if ((res.RecastTimerId == 0) or (res.RecastTimerId == 254)) then
         state.MacroImage = { 'abilities/1hr.png' };
     else
@@ -443,16 +414,17 @@ end
 
 Update.Item = function(index)
     local res = state.ActionResources[index];
+    local name = encoding:ShiftJIS_To_UTF8(res.Name[1]);
     if (bit.band(res.Targets, 0xFC) ~= 0) then
         if (gSettings.DefaultSelectTarget) then
-            state.MacroText = { string.format('/item \"%s\" <st>', res.Name[1]) };
+            state.MacroText = { string.format('/item \"%s\" <st>', name) };
         else
-            state.MacroText = { string.format('/item \"%s\" <t>', res.Name[1]) };
+            state.MacroText = { string.format('/item \"%s\" <t>', name) };
         end
     else
-        state.MacroText = { string.format('/item \"%s\" <me>', res.Name[1]) };
+        state.MacroText = { string.format('/item \"%s\" <me>', name) };
     end
-    state.MacroLabel = { res.Name[1] };
+    state.MacroLabel = { name };
     state.MacroImage = { string.format('ITEM:%u', res.Id) };
     state.CostOverride = nil;
     UpdateMacroImage();
@@ -460,16 +432,17 @@ end
 
 Update.Spell = function(index)
     local res = state.ActionResources[index];
+    local name = encoding:ShiftJIS_To_UTF8(res.Name[1]);
     if (bit.band(res.Targets, 0xFC) ~= 0) then
         if (gSettings.DefaultSelectTarget) then
-            state.MacroText = { string.format('/ma \"%s\" <st>', res.Name[1]) };
+            state.MacroText = { string.format('/ma \"%s\" <st>', name) };
         else
-            state.MacroText = { string.format('/ma \"%s\" <t>', res.Name[1]) };
+            state.MacroText = { string.format('/ma \"%s\" <t>', name) };
         end
     else
-        state.MacroText = { string.format('/ma \"%s\" <me>', res.Name[1]) };
+        state.MacroText = { string.format('/ma \"%s\" <me>', name) };
     end
-    state.MacroLabel = { res.Name[1] };
+    state.MacroLabel = { name };
     state.MacroImage = { string.format('spells/%u.png', res.Index) };
     state.CostOverride = { '' };
     UpdateMacroImage();
@@ -477,8 +450,9 @@ end
 
 Update.Trust = function(index)
     local res = state.ActionResources[index];
-    state.MacroText = { string.format('/ma \"%s\" <me>', res.Name[1]) };
-    state.MacroLabel = { res.Name[1] };
+    local name = encoding:ShiftJIS_To_UTF8(res.Name[1]);
+    state.MacroText = { string.format('/ma \"%s\" <me>', name) };
+    state.MacroLabel = { name };
     state.MacroImage = { string.format('spells/%u.png', res.Index) };
     state.CostOverride = { '' };
     UpdateMacroImage();
@@ -486,16 +460,17 @@ end
 
 Update.Weaponskill = function(index)
     local res = state.ActionResources[index];
+    local name = encoding:ShiftJIS_To_UTF8(res.Name[1]);
     if (bit.band(res.Targets, 0xFC) ~= 0) then
         if (gSettings.DefaultSelectTarget) then
-            state.MacroText = { string.format('/ws \"%s\" <st>', res.Name[1]) };
+            state.MacroText = { string.format('/ws \"%s\" <st>', name) };
         else
-            state.MacroText = { string.format('/ws \"%s\" <t>', res.Name[1]) };
+            state.MacroText = { string.format('/ws \"%s\" <t>', name) };
         end
     else
-        state.MacroText = { string.format('/ws \"%s\" <me>', res.Name[1]) };
+        state.MacroText = { string.format('/ws \"%s\" <me>', name) };
     end
-    state.MacroLabel = { res.Name[1] };
+    state.MacroLabel = { name };
     state.MacroImage = { wsmap[res.Id] or '' };
     state.CostOverride = { '' };
     UpdateMacroImage();
@@ -735,12 +710,12 @@ function exposed:Render()
                     if (state.ForceTab == 2) then
                         state.ForceTab = nil;
                     end
-                    local layout = gInterface:GetLayout();
+                    local layout = gSingleDisplay.Layout;
                     local width = 32;
                     local height = 32;
                     if layout then
-                        width = layout.SingleDisplay.ImageObjects.Icon.Width;
-                        height = layout.SingleDisplay.ImageObjects.Icon.Height;
+                        width = layout.Icon.Width;
+                        height = layout.Icon.Height;
                     end
                     imgui.BeginChild('AppearanceChild', { 253, 235 + height }, true);
                     imgui.TextColored(header, 'Image');
@@ -755,7 +730,7 @@ function exposed:Render()
                     if (state.Combos.Type[state.Indices.Type] ~= 'Empty') then
                         imgui.InputText('##MacroImage', state.MacroImage, 256);
                         imgui.SameLine();
-                        if (imgui.Button('Update', { 60, 0 })) then
+                        if (imgui.Button('Preview', { 60, 0 })) then
                             UpdateMacroImage();
                         end
                     end
@@ -818,14 +793,16 @@ function exposed:Render()
             imgui.End();
         end
     end
+    if (state.IsOpen[1] == false) then
+        self.ForceDisplay = nil;
+    else
+        self.ForceDisplay = gSingleDisplay;
+        self.ForceState = state.MacroState;
+    end
 end
 
 function exposed:Show(macroState, macroButton)
-    local square;
-    local squareMgr = gInterface:GetSquareManager();
-    if (squareMgr ~= nil) then
-        square = squareMgr:GetSquareByButton(macroState, macroButton);
-    end
+    local square = gSingleDisplay:GetElementByMacro(macroState, macroButton);
     if square == nil then
         state = { IsOpen = { false } };
         return;
@@ -925,7 +902,7 @@ function exposed:Show(macroState, macroButton)
 
             state.Combos.Action = T{};
             for _,res in ipairs(state.ActionResources) do
-                state.Combos.Action:append(res.Name[1]);
+                state.Combos.Action:append(encoding:ShiftJIS_To_UTF8(res.Name[1]));
             end
         end
         
@@ -947,7 +924,7 @@ function exposed:Show(macroState, macroButton)
 
             state.Combos.Action = T{};
             for _,res in ipairs(state.ActionResources) do
-                state.Combos.Action:append(res.Name[1]);
+                state.Combos.Action:append(encoding:ShiftJIS_To_UTF8(res.Name[1]));
             end
         end
         
@@ -972,13 +949,14 @@ function exposed:Show(macroState, macroButton)
                 local prev = state.ActionResources[index - 1];
                 local next = state.ActionResources[index + 1];
         
+                local name = encoding:ShiftJIS_To_UTF8(res.Name[1]);
                 --Show item id if multiple matching items..
-                if (prev) and (prev.Name[1] == res.Name[1]) then
-                    state.Combos.Action:append(string.format('%s[%u]', res.Name[1], res.Id));            
-                elseif (next) and (next.Name[1] == res.Name[1]) then
-                    state.Combos.Action:append(string.format('%s[%u]', res.Name[1], res.Id));
+                if (prev) and (prev.Name[1] == name) then
+                    state.Combos.Action:append(string.format('%s[%u]', name, res.Id));            
+                elseif (next) and (next.Name[1] == name) then
+                    state.Combos.Action:append(string.format('%s[%u]', name, res.Id));
                 else
-                    state.Combos.Action:append(res.Name[1]);
+                    state.Combos.Action:append(name);
                 end
             end
         end

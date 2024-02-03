@@ -71,22 +71,6 @@ function controller:HandleInput(e)
     end
 end
 
-local function LoadLayout(layoutName)
-    --Attempt to load layout file.
-    local layoutPaths = T{
-        string.format('%sconfig/addons/%s/resources/controllers/%s.lua', AshitaCore:GetInstallPath(), addon.name, layoutName),
-        string.format('%saddons/%s/resources/controllers/%s.lua', AshitaCore:GetInstallPath(), addon.name, layoutName),
-    };
-
-    for _,path in ipairs(layoutPaths) do
-        local layout = LoadFile_s(path);
-        if (layout ~= nil) then
-            layout.Name = layoutName;
-            return layout;
-        end
-    end
-end
-
 function controller:InitializeControls()
     --Initialize any blank controls..
     local changed = false;
@@ -111,10 +95,6 @@ function controller:InitializeControls()
         settings.save();
     end
 end
-
-local function Ternary(condition, true_result, false_result)
-    if (condition) then return true_result else return false_result end
-end 
 
 function controller:SetLayout(layoutName)
     gBindingGUI:Close();
@@ -245,8 +225,7 @@ function controller:Trigger(button, pressed)
     
     if (button == controls.PreviousPalette) then
         self.ComboState.PrevPalette = pressed;
-        local swapComboCheck = Ternary(gSettings.EnablePaletteSwapCombo, gSettings.EnablePaletteSwapCombo and self:GetMacroState() == 1, self:GetMacroState() == 0);
-        if (pressed == true and swapComboCheck == true) then
+        if (pressed == true) and (self:GetMacroState() == 1) then
             gBindings:PreviousPalette();
         end
         if (self:GetMacroState() ~= 0) then
@@ -255,8 +234,7 @@ function controller:Trigger(button, pressed)
         
     elseif (button == controls.NextPalette) then
         self.ComboState.NextPalette = pressed;
-        local swapComboCheck = Ternary(gSettings.EnablePaletteSwapCombo, gSettings.EnablePaletteSwapCombo and self:GetMacroState() == 2, self:GetMacroState() == 0);
-        if (pressed == true and swapComboCheck == true) then
+        if (pressed == true) and (self:GetMacroState() == 2) then
             gBindings:NextPalette();
         end
         if (self:GetMacroState() ~= 0) then
